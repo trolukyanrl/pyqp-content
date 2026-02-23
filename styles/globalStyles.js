@@ -36,4 +36,4 @@ export const globalStyles = {
       elevation: 8,
     },
   },
-}; 
+};

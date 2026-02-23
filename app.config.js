@@ -52,7 +52,10 @@ export default {
         "resizeMode": "contain",
         "backgroundColor": "#000000"
       }
-    ]
+    ],
+    "@react-native-community/datetimepicker",
+    "expo-font",
+    "expo-web-browser"
   ],
   experiments: {
     typedRoutes: true

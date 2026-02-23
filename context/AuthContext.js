@@ -1,7 +1,5 @@
 import { useContext, createContext, useState, useEffect } from "react";
-import { Text, SafeAreaView, ActivityIndicator, StyleSheet } from "react-native";
 import { account } from "../lib/appwriteConfig.js";
-import { setupAdminAccount } from "../lib/setupAdmin.js";
 
 // Admin credentials
 const ADMIN_EMAIL = "adminboss@gmail.com";
@@ -9,54 +7,40 @@ const ADMIN_PASSWORD = "Adminboss@123";
 
 const AuthContext = createContext();
 
+const isUnauthenticatedError = (error) => {
+    const message = error?.message?.toLowerCase?.() || "";
+    return (
+        message.includes("missing scopes") ||
+        message.includes("guests") ||
+        message.includes("unauthorized") ||
+        message.includes("not found")
+    );
+};
+
 const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [session, setSession] = useState(false);
     const [user, setUser] = useState(false);
     const [isAdmin, setIsAdmin] = useState(false);
-    const [initAttempted, setInitAttempted] = useState(false);
 
     useEffect(() => {
-        if (!initAttempted) {
-            setInitAttempted(true);
-            
-            // Run init but don't wait for it to avoid splash screen freeze
-            initAuth();
-            
-            // Set a strict timeout to prevent infinite loading
-            const timeoutId = setTimeout(() => {
-                if (loading) {
-                    console.log("Auth loading timeout reached, forcing UI to render");
-                    setLoading(false);
-                }
-            }, 2000); // 2 seconds timeout
-            
-            return () => clearTimeout(timeoutId);
-        }
-    }, [initAttempted, loading]);
+        initAuth();
+    }, []);
 
-    // Modified to not be async so it doesn't block rendering
-    const initAuth = () => {
+    const initAuth = async () => {
         console.log("Starting authentication initialization...");
-        
-        // Force loading to finish after a timeout regardless of auth state
-        setTimeout(() => {
+        try {
+            await checkAuth();
+        } catch (error) {
+            // Unexpected auth errors should not block the app.
+            console.log("Initial auth check failed:", error?.message || error);
+            setSession(null);
+            setUser(null);
+            setIsAdmin(false);
+        } finally {
+            console.log("Auth initialization completed");
             setLoading(false);
-            console.log("Auth initialization timeout - forcing completion");
-        }, 2000);
-        
-        // Attempt auth in the background
-        checkAuth()
-            .catch(error => {
-                console.log("Initial auth check failed:", error.message);
-                setSession(null);
-                setUser(null);
-                setIsAdmin(false);
-            })
-            .finally(() => {
-                console.log("Auth initialization completed");
-                setLoading(false);
-            });
+        }
     };
 
     const checkAuth = async () => {
@@ -77,8 +61,15 @@ const AuthProvider = ({ children }) => {
             console.log("Auth check successful, user is admin:", userIsAdmin);
             return true;
         } catch (error) {
+            if (isUnauthenticatedError(error)) {
+                // Expected state when there is no active login yet.
+                setSession(null);
+                setUser(null);
+                setIsAdmin(false);
+                return false;
+            }
+
             console.log("Auth check error:", error.message);
-            // Make sure we reset session and user if there's an error
             setSession(null);
             setUser(null);
             setIsAdmin(false);
@@ -175,20 +166,6 @@ const AuthProvider = ({ children }) => {
         </AuthContext.Provider>
     );
 };
-
-const styles = StyleSheet.create({
-    loadingContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        backgroundColor: 'white',
-    },
-    loadingText: {
-        marginTop: 10,
-        fontSize: 16,
-        color: '#333',
-    }
-});
 
 const useAuth = () => {
     return useContext(AuthContext);
